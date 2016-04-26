@@ -2,6 +2,8 @@
 
 define('ERR_MISSING_INPUTS', -1);
 define('ERR_INVALID_INPUTS', -2);
+define('ERR_SERVER_ERROR',   -3);
+define('ERR_EMAIL_DUP',      -4);
 
 header('Content-Type: application/json');
 
@@ -116,10 +118,94 @@ if (count($errors) > 0) {
 // OK, all inputs look good. Insert into the database...
 // ---------------------------------------------------------------------------------------------------------------------
 
+$post2db = [
+    'inputLastName'     => ['name' => '`utilisateur`.`nom`'],
+    'inputFirstName'    => ['name' => '`utilisateur`.`prenon`'],
+    'inputAddress'      => ['name' => '`utilisateur`.`adresse`'],
+    'inputCity'         => ['name' => '`utilisateur`.`ville`'],
+    'inputZip'          => ['name' => '`utilisateur`.`code_postal`'],
+    'inputPhone'        => ['name' => '`utilisateur`.`tel`'],
+    'inputEmail'        => ['name' => '`utilisateur`.`email`'],
+    'inputPassword'     => ['name' => '`utilisateur`.`mdp`'],
+    'inputRef'          => ['name' => '`connu_par`.`intitule`']
+];
 
 // bla, bla, bla...
 
+$dsn      = 'mysql:dbname=mydatabase;host=127.0.0.1';
+$user     = 'dbuser';
+$password = 'dbpass';
 
+try {
+    $dbh = new PDO($dsn, $user, $password);
+} catch (PDOException $e) {
+    echo json_encode(['status' => 'error', 'code' => ERR_SERVER_ERROR, 'data' => []], true);
+    exit(0);
+}
+
+// Quote all data.
+
+foreach ($post2db as $_name => $_spec) {
+    $value = $_POST[$_name];
+    $post2db[$_name]['value'] = $dbh->quote($value);
+}
+
+// Insert the user.
+
+$record = [];
+$inputs = ['inputLastName', 'inputFirstName', 'inputAddress', 'inputCity', 'inputZip', 'inputPhone', 'inputEmail', 'inputPassword'];
+foreach ($inputs as $_inputName) {
+    $record[] = $post2db[$_inputName]['name'] . '=' . $post2db[$_inputName]['value'];
+}
+$sql = "INSERT INTO `utilisateur` SET " . join(', ', $record);
+
+$userId = null;
+try {
+    $dbh->exec($sql);
+    $userId = $dbh->lastInsertId();
+} catch (Exception $e) {
+    // We should test if we have duplicated keys.
+    // But we do not have the entire schema...
+    // So we assume that there is no constraint.
+
+    $error = $dbh->errorInfo();
+    $error = $error[0];
+
+    // You must use the constant instead of numeric value.
+    if ($errors == 1022) {
+        // Duplicated email.
+        echo json_encode(['status' => 'error', 'code' => ERR_EMAIL_DUP, 'data' => []], true);
+        exit(0);
+    }
+
+    echo json_encode(['status' => 'error', 'code' => ERR_SERVER_ERROR, 'data' => []], true);
+    exit(0);
+}
+
+$intituleId = null;
+$sql = "SELECT `id` FROM `connu_par` WHERE " . $post2db['inputRef']['name'] . " = " . $post2db['inputRef']['value'];
+$result = $dbh->query($sql, PDO::FETCH_ASSOC);
+$result = $result->fetchAll();
+
+if (count($result) == 0) {
+    echo json_encode(['status' => 'error', 'code' => ERR_SERVER_ERROR, 'data' => []], true);
+    exit(0);
+}
+
+$intituleId = $result[0]['id'];
+
+// Insert the the mapping.
+
+$sql = "INSERT INTO `utilisateur_connu_par` SET `id_utilisateur` = $userId, `id_connu_par` = $intituleId";
+try {
+    $dbh->exec($sql);
+} catch (Exception $e) {
+    // We should test if we have duplicated keys.
+    // But we do not have the entire schema...
+    // So we assume that there is no constraint.
+    echo json_encode(['status' => 'error', 'code' => ERR_SERVER_ERROR, 'data' => []], true);
+    exit(0);
+}
 
 
 echo json_encode(['status' => 'sucess', 'data' => []]);
