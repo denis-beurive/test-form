@@ -1,0 +1,7 @@
+input.has-error {
+    background-color: #c0a16b;
+}
+
+select.has-error {
+    background-color: #c0a16b;
+}

@@ -1,0 +1,10 @@
+{
+  "name": "test-recrutement",
+  "version": "1.0.0",
+  "dependencies": {
+    "bootstrap": "3.3.6",
+    "less": "2.5.3"
+  },
+  "private": true,
+  "directory" : "www/bower_components"
+}
